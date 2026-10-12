@@ -4,7 +4,20 @@ import "leaflet/dist/leaflet.css";
 ---
 
 <Layout>
-  <div id="map" style="height: 600px;"></div>
+  <main class="page">
+    <header class="page-header">
+      <div>
+        <h1>Carte des établissements</h1>
+        <p>Explorez la localisation des établissements en France.</p>
+      </div>
+
+      <a class="population-link" href="/population">
+        Voir la population
+      </a>
+    </header>
+
+    <div id="map" aria-label="Carte des établissements en France"></div>
+  </main>
   <script>
     import listeEtablissements from "../assets/listeEtablissements.json";
 
@@ -30,3 +43,82 @@ import "leaflet/dist/leaflet.css";
     });
   </script>
 </Layout>
+
+<style>
+  .page {
+    width: min(1200px, calc(100% - 2rem));
+    margin: 0 auto;
+    padding: 2rem 0;
+    color: #172033;
+    font-family:
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
+  }
+
+  .page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1.5rem;
+    margin-bottom: 1rem;
+  }
+
+  h1 {
+    margin: 0;
+    color: #0f172a;
+    font-size: clamp(1.75rem, 3vw, 2.25rem);
+  }
+
+  p {
+    margin: 0.5rem 0 0;
+    color: #475569;
+  }
+
+  .population-link {
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.5rem;
+    padding: 0.7rem 1rem;
+    color: #ffffff;
+    background: #2563eb;
+    font-weight: 600;
+    text-decoration: none;
+    transition:
+      background-color 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .population-link:hover {
+    background: #1d4ed8;
+    transform: translateY(-1px);
+  }
+
+  .population-link:focus-visible {
+    outline: 3px solid #93c5fd;
+    outline-offset: 3px;
+  }
+
+  #map {
+    width: 100%;
+    height: 600px;
+    overflow: hidden;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+  }
+
+  @media (max-width: 640px) {
+    .page-header {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .population-link {
+      width: 100%;
+    }
+  }
+</style>
