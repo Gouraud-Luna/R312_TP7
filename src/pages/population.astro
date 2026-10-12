@@ -1,0 +1,543 @@
+---
+import populationMain from "../assets/populationMain.json";
+
+const periods = [
+  ...new Set(populationMain.map((d) => String(d.Période))),
+].sort((a, b) => Number(b) - Number(a));
+
+const sexes = [
+  ...new Set(populationMain.map((d) => String(d.Sexe))),
+].sort();
+
+const ages = [
+  ...new Set(populationMain.map((d) => String(d["Âge"]))),
+].sort((a, b) => a.localeCompare(b, "fr", { numeric: true }));
+---
+
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Carte interactive de la population française par département."
+    />
+    <title>Population par département</title>
+  </head>
+
+  <body>
+    <main class="page">
+      <header>
+        <h1>Population par département</h1>
+
+        <p class="introduction">
+          Sélectionnez une année, un sexe et une tranche d’âge. La carte est
+          mise à jour automatiquement avec les données correspondantes.
+        </p>
+      </header>
+
+      <section class="filters" aria-labelledby="filters-title">
+        <h2 id="filters-title">Filtres de la carte</h2>
+
+        <div class="filter">
+          <label for="periode">Année</label>
+
+          <select id="periode" name="periode">
+            {
+              periods.map((period, index) => (
+                <option value={period} selected={index === 0}>
+                  {period}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <div class="filter">
+          <label for="sexe">Sexe</label>
+
+          <select id="sexe" name="sexe">
+            {
+              sexes.map((sex, index) => (
+                <option value={sex} selected={index === 0}>
+                  {sex}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+
+        <div class="filter">
+          <label for="age">Âge</label>
+
+          <select id="age" name="age">
+            {
+              ages.map((age, index) => (
+                <option value={age} selected={index === 0}>
+                  {age}
+                </option>
+              ))
+            }
+          </select>
+        </div>
+      </section>
+
+      <p id="resume-filtres" class="resume" aria-live="polite"></p>
+
+      <figure class="chart" aria-labelledby="map-title">
+        <h2 id="map-title">Carte de la population</h2>
+
+        <div
+          id="carte-population"
+          tabindex="0"
+          aria-live="polite"
+          aria-label="Carte interactive de la population par département"
+        ></div>
+
+        <figcaption>
+          Chaque département est coloré selon la population correspondant aux
+          filtres choisis. Survolez un département pour consulter son nom, son
+          code et sa valeur de population.
+        </figcaption>
+      </figure>
+
+      <section class="help" aria-labelledby="help-title">
+        <h2 id="help-title">Lire la carte</h2>
+
+        <p>
+          Une couleur plus foncée correspond à une population plus élevée.
+          Les départements pour lesquels aucune donnée n’est trouvée sont
+          affichés en gris clair.
+        </p>
+      </section>
+    </main>
+
+    <script>
+      import * as Plot from "@observablehq/plot";
+      import populationMain from "../assets/populationMain.json";
+      import departements from "../assets/departements.geojson.json";
+
+      type PopulationRow = {
+        Géographie: string;
+        Période: string | number;
+        Sexe: string;
+        "Âge": string | number;
+        [key: string]: unknown;
+      };
+
+      type GeoJsonFeature = {
+        type: "Feature";
+        properties?: Record<string, unknown>;
+        geometry: unknown;
+      };
+
+      type GeoJsonCollection = {
+        type: "FeatureCollection";
+        features: GeoJsonFeature[];
+      };
+
+      const elmYear = document.getElementById("periode") as HTMLSelectElement;
+      const elmSex = document.getElementById("sexe") as HTMLSelectElement;
+      const elmAge = document.getElementById("age") as HTMLSelectElement;
+
+      const container = document.getElementById(
+        "carte-population",
+      ) as HTMLDivElement;
+
+      const resume = document.getElementById(
+        "resume-filtres",
+      ) as HTMLParagraphElement;
+
+      const data = populationMain as PopulationRow[];
+      const geojson = departements as GeoJsonCollection;
+
+      function normaliseCode(value: unknown): string {
+        return String(value ?? "")
+          .trim()
+          .padStart(2, "0");
+      }
+
+      function normaliseDepartmentName(value: unknown): string {
+        return String(value ?? "")
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "")
+          .toLowerCase()
+          .replace(/[’']/g, "'")
+          .replace(/\s+/g, " ")
+          .trim();
+      }
+
+      function getDepartmentNameFromPopulation(row: PopulationRow): string {
+        return normaliseDepartmentName(row.Géographie);
+      }
+
+      function getPopulationValue(row: PopulationRow): number {
+        const possibleKeys = [
+          "Population",
+          "population",
+          "POP",
+          "pop",
+          "Valeur",
+          "valeur",
+          "Value",
+          "value",
+          "Nombre",
+          "nombre",
+          "Effectif",
+          "effectif",
+        ];
+
+        for (const key of possibleKeys) {
+          const value = row[key];
+
+          if (value !== undefined && value !== null) {
+            const parsedValue = Number(
+              String(value)
+                .replace(/\s/g, "")
+                .replace(",", "."),
+            );
+
+            if (!Number.isNaN(parsedValue)) {
+              return parsedValue;
+            }
+          }
+        }
+
+        return 0;
+      }
+
+      function getDepartmentCodeFromFeature(feature: GeoJsonFeature): string {
+        const properties = feature.properties ?? {};
+
+        const possibleKeys = [
+          "code",
+          "CODE",
+          "code_insee",
+          "code_dept",
+          "code_departement",
+          "INSEE_DEP",
+          "DEP",
+          "dep",
+          "id",
+        ];
+
+        for (const key of possibleKeys) {
+          if (properties[key] !== undefined && properties[key] !== null) {
+            return normaliseCode(properties[key]);
+          }
+        }
+
+        return "";
+      }
+
+      function getDepartmentName(feature: GeoJsonFeature): string {
+        const properties = feature.properties ?? {};
+
+        const possibleKeys = [
+          "nom",
+          "NOM",
+          "name",
+          "NAME",
+          "libelle",
+          "LIBELLE",
+          "nom_departement",
+          "Nom",
+        ];
+
+        for (const key of possibleKeys) {
+          if (properties[key] !== undefined && properties[key] !== null) {
+            return String(properties[key]);
+          }
+        }
+
+        return "Département non identifié";
+      }
+
+      function formatPopulation(value: number | undefined): string {
+        if (value === undefined || Number.isNaN(value)) {
+          return "Donnée indisponible";
+        }
+
+        return new Intl.NumberFormat("fr-FR").format(value);
+      }
+
+      function updateMap() {
+        const selectedYear = elmYear.value;
+        const selectedSex = elmSex.value;
+        const selectedAge = elmAge.value;
+
+        const filteredData = data.filter((row) => {
+          return (
+            String(row.Période) === selectedYear &&
+            String(row.Sexe) === selectedSex &&
+            String(row["Âge"]) === selectedAge
+          );
+        });
+
+        const populationByDepartment = new Map<string, number>();
+
+        filteredData.forEach((row) => {
+          const departmentName = getDepartmentNameFromPopulation(row);
+          const population = getPopulationValue(row);
+
+          if (departmentName !== "") {
+            populationByDepartment.set(departmentName, population);
+          }
+        });
+
+        const mapData = geojson.features.map((feature) => {
+          const departmentCode = getDepartmentCodeFromFeature(feature);
+          const departmentName = getDepartmentName(feature);
+          const population = populationByDepartment.get(
+            normaliseDepartmentName(departmentName),
+          );
+
+          return {
+            ...feature,
+            properties: {
+              ...feature.properties,
+              departmentCode,
+              departmentName,
+              population,
+            },
+          };
+        });
+
+        const values = mapData
+          .map((feature) => Number(feature.properties?.population))
+          .filter((value) => Number.isFinite(value));
+
+        const numberOfDepartmentsWithData = values.length;
+        const totalPopulation = values.reduce((sum, value) => sum + value, 0);
+
+        resume.textContent =
+          `Filtres actifs : année ${selectedYear}, sexe ${selectedSex}, ` +
+          `âge ${selectedAge}. ${numberOfDepartmentsWithData} départements ` +
+          `ont une donnée disponible. Population totale affichée : ` +
+          `${formatPopulation(totalPopulation)}.`;
+
+        container.replaceChildren();
+
+        const chartWidth = Math.min(
+          Math.max(container.clientWidth || 900, 320),
+          1200,
+        );
+
+        const chart = Plot.plot({
+          width: chartWidth,
+          height: 720,
+          margin: 10,
+          projection: {
+            type: "mercator",
+            domain: geojson,
+          },
+          color: {
+            type: "quantile",
+            n: 6,
+            scheme: "blues",
+            legend: true,
+            label: "Population",
+            unknown: "#e5e7eb",
+          },
+          title: `Population par département en ${selectedYear}`,
+          subtitle: `Sexe : ${selectedSex} — Âge : ${selectedAge}`,
+          caption:
+            "Les départements sans donnée associée sont représentés en gris clair.",
+          ariaLabel:
+            `Carte de la population par département en France pour l'année ` +
+            `${selectedYear}, le sexe ${selectedSex} et l'âge ${selectedAge}.`,
+          marks: [
+            Plot.geo(mapData, {
+              fill: (feature) => feature.properties?.population,
+              stroke: "white",
+              strokeWidth: 0.7,
+              title: (feature) => {
+                const properties = feature.properties ?? {};
+                const name = String(
+                  properties.departmentName ?? "Département non identifié",
+                );
+                const code = String(properties.departmentCode ?? "");
+                const value = properties.population as number | undefined;
+
+                return `${name} (${code})\nPopulation : ${formatPopulation(value)}`;
+              },
+              tip: true,
+            }),
+            Plot.geo(geojson, {
+              fill: "none",
+              stroke: "#64748b",
+              strokeOpacity: 0.45,
+              strokeWidth: 0.4,
+              ariaLabel: "Contours des départements",
+            }),
+          ],
+        });
+
+        container.append(chart);
+      }
+
+      elmYear.addEventListener("change", updateMap);
+      elmSex.addEventListener("change", updateMap);
+      elmAge.addEventListener("change", updateMap);
+
+      window.addEventListener("resize", () => {
+        updateMap();
+      });
+
+      updateMap();
+    </script>
+  </body>
+</html>
+
+<style>
+  :global(*) {
+    box-sizing: border-box;
+  }
+
+  :global(body) {
+    margin: 0;
+    color: #172033;
+    background: #f8fafc;
+    font-family:
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      "Segoe UI",
+      sans-serif;
+  }
+
+  .page {
+    width: min(1200px, calc(100% - 2rem));
+    margin: 0 auto;
+    padding: 2rem 0 4rem;
+  }
+
+  h1,
+  h2 {
+    color: #0f172a;
+  }
+
+  h1 {
+    margin-bottom: 0.5rem;
+  }
+
+  .introduction {
+    max-width: 75ch;
+    line-height: 1.6;
+  }
+
+  .filters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem 1.5rem;
+    align-items: end;
+    margin: 2rem 0 1rem;
+    padding: 1.25rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    background: white;
+  }
+
+  .filters h2 {
+    width: 100%;
+    margin: 0;
+    font-size: 1.2rem;
+  }
+
+  .filter {
+    display: grid;
+    gap: 0.4rem;
+  }
+
+  label {
+    font-weight: 700;
+  }
+
+  select {
+    min-width: 12rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid #64748b;
+    border-radius: 0.4rem;
+    background: white;
+    color: #172033;
+    font: inherit;
+  }
+
+  select:focus-visible,
+  #carte-population:focus-visible {
+    outline: 3px solid #2563eb;
+    outline-offset: 3px;
+  }
+
+  .resume {
+    min-height: 1.5rem;
+    margin: 1rem 0;
+    font-weight: 600;
+  }
+
+  .chart {
+    margin: 1.5rem 0;
+    padding: 1rem;
+    border: 1px solid #cbd5e1;
+    border-radius: 0.75rem;
+    background: white;
+  }
+
+  .chart h2 {
+    margin-top: 0;
+  }
+
+  #carte-population {
+    width: 100%;
+    min-height: 720px;
+    overflow-x: auto;
+  }
+
+  #carte-population :global(svg) {
+    display: block;
+    max-width: 100%;
+    height: auto;
+  }
+
+  figcaption {
+    margin-top: 1rem;
+    color: #475569;
+    line-height: 1.5;
+  }
+
+  .help {
+    padding: 1rem 1.25rem;
+    border-left: 5px solid #2563eb;
+    background: #dbeafe;
+  }
+
+  .help h2 {
+    margin-top: 0;
+    font-size: 1.15rem;
+  }
+
+  .help p {
+    margin-bottom: 0;
+    line-height: 1.5;
+  }
+
+  @media (max-width: 600px) {
+    .page {
+      width: min(100% - 1rem, 1200px);
+      padding-top: 1rem;
+    }
+
+    .filters {
+      display: grid;
+    }
+
+    select {
+      width: 100%;
+    }
+
+    #carte-population {
+      min-height: 500px;
+    }
+  }
+</style>
