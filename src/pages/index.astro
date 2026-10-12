@@ -1,21 +1,32 @@
 ---
-import PlotFigure from "../components/PlotFigure.astro";
 import Layout from "../layouts/Layout.astro";
-import * as Plot from "@observablehq/plot";
-import penguins from "../assets/penguins.json";
+import "leaflet/dist/leaflet.css";
 ---
 
 <Layout>
-  <h1 class="text-2xl">Test Astro et Plot (Observablehq)</h1>
-  <PlotFigure
-    options={{
-      marks: [
-        Plot.dot(penguins, {
-          x: "culmen_length_mm",
-          y: "culmen_depth_mm",
-          stroke: "species",
-        }),
-      ],
-    }}
-  />
+  <div id="map" style="height: 600px;"></div>
+  <script>
+    import listeEtablissements from "../assets/listeEtablissements.json";
+
+    import L from "leaflet";
+
+    // Dans l'élément d'ID "map", création de la carte centrée sur la France.
+    const map = L.map("map").setView([46.6033, 1.883], 6);
+
+    // ... https://leafletjs.com/examples/quick-start/
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 19,
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+
+    listeEtablissements.forEach((et) => {
+      const dot = L.circleMarker([et.lat, et.lon], {
+        color: "red",
+        radius: 2,
+        fillColor: "red",
+        opacity: 0.25,
+      }).addTo(map);
+      dot.bindPopup(et.name);
+    });
+  </script>
 </Layout>

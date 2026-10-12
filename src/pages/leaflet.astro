@@ -1,0 +1,69 @@
+---
+import "leaflet/dist/leaflet.css";
+---
+
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Carte des établissements</title>
+  </head>
+
+  <body>
+    <main>
+      <h1>Carte des établissements</h1>
+
+      <p id="map-description">
+        Carte interactive indiquant la localisation des établissements.
+      </p>
+
+      <div
+        id="map"
+        role="application"
+        aria-label="Carte interactive des établissements en France"
+        aria-describedby="map-description"
+      ></div>
+    </main>
+
+    <script>
+      import L from "leaflet";
+      import listeEtablissements from "../assets/listeEtablissements.json";
+
+      const map = L.map("map").setView([46.6033, 1.883], 6);
+
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "&copy; OpenStreetMap contributors",
+      }).addTo(map);
+
+      console.log(listeEtablissements);
+
+      // À compléter après avoir regardé les noms des propriétés du JSON.
+      // listeEtablissements.forEach((etablissement) => {
+      //   const latitude = etablissement.latitude;
+      //   const longitude = etablissement.longitude;
+      //   const nom = etablissement.nom;
+      //
+      //   if (latitude && longitude) {
+      //     L.marker([latitude, longitude])
+      //       .addTo(map)
+      //       .bindPopup(`<strong>${nom}</strong>`);
+      //   }
+      // });
+    </script>
+  </body>
+</html>
+
+<style>
+  main {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 2rem 1rem;
+  }
+
+  #map {
+    width: 100%;
+    height: 600px;
+    margin-top: 1rem;
+  }
+</style>
